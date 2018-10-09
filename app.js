@@ -1,7 +1,11 @@
 const yargs = require('yargs');
+const axios = require('axios');
 
 const geocode = require('./geocode/geocode');
 const weather = require('./weather/weather');
+
+const geoApiKey = '';
+const weatherApiKey = '';
 
 //Command-line arg options:
 const argv = yargs
@@ -17,21 +21,28 @@ const argv = yargs
     .alias('help','h')
     .argv;
 
-geocode.geocodeAddress(argv.a, (error, results)=>{
-    if(error){
-        console.log(error);
+var mapQuestUrl = `http://www.mapquestapi.com/geocoding/v1/address?key=${geoApiKey}&location=${encodeURIComponent(argv.address)}`;
+
+//use axios library (with promises) to chain both API calls:
+axios.get(mapQuestUrl).then((response) => {
+    if(response.data.info.statuscode === 0){
+        console.log(argv.address); 
+        var lat = response.data.results[0].locations[0].latLng.lat;
+        var lng = response.data.results[0].locations[0].latLng.lng;
+        //chained 2nd
+        return axios.get(`https://api.darksky.net/forecast/${weatherApiKey}/${lat},${lng}`);
     }else{
-        console.log(results.address);
-        //lat,lng,callback
-        weather.getWeather(results.latitude,results.longitude, (errorMessage, weatherResults)=>{
-            if(error){
-                console.log(errorMessage)
-            }else{
-                console.log(`It's currently ${weatherResults.temperature}. Feels like ${weatherResults.apparentTemperature}`);
-            }
-        });
+        throw new Error('Unable to retrieve address');
+    }
+//chained 2nd
+}).then((response)=>{
+    var temperature = response.data.currently.temperature;
+    var apparentTemperature = response.data.currently.apparentTemperature;
+    console.log(`It's currently: ${temperature}, but feels like ${apparentTemperature}`);
+}).catch((e) =>{
+    if(e.code === 'ENOTFOUND'){
+        console.log('could not connect');
+    }else{
+        console.log(e.message);
     }
 });
-
-
-
